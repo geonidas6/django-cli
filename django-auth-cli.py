@@ -50,16 +50,16 @@ def get_project_name():
         for item in os.listdir('.'):
             if os.path.isdir(item) and os.path.exists(os.path.join(item, 'settings.py')):
                 return item
-    return 'gest_ecole' # Fallback default
+    return 'my_django_project' # Fallback default
 
-def setup_accounts_app(app_name='accounts'):
+def setup_accounts_app(app_name='accounts', project_name='Config'):
     print(f"{Colors.BOLD}Setting up '{app_name}' app...{Colors.ENDC}")
     if not os.path.exists(app_name):
         run_command(f"{sys.executable} manage.py startapp {app_name}")
         print_success(f"App '{app_name}' created.")
     
     # Register in settings.py
-    project_name = get_project_name()
+    # project_name = get_project_name()  # Use passed arg
     settings_path = os.path.join(project_name, 'settings.py')
 
     with open(settings_path, 'r') as f:
@@ -82,7 +82,7 @@ def setup_accounts_app(app_name='accounts'):
         f"LOGOUT_REDIRECT_URL = '{app_name}:login'",
         f"LOGIN_URL = '{app_name}:login'",
         f"EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'",
-        f"DEFAULT_FROM_EMAIL = 'noreply@gestecole.com'"
+        f"DEFAULT_FROM_EMAIL = 'noreply@{project_name.lower()}.com'"
     ]
     for setting in auth_settings:
         if setting.split(' = ')[0] not in content:
@@ -99,7 +99,7 @@ def setup_accounts_app(app_name='accounts'):
         # EMAIL_USE_TLS = True
         # EMAIL_HOST_USER = 'votre-email@gmail.com'
         # EMAIL_HOST_PASSWORD = 'votre-mot-de-passe-d-application'
-        # DEFAULT_FROM_EMAIL = 'GestEcole <votre-email@gmail.com>'
+        # DEFAULT_FROM_EMAIL = '{project_name} <votre-email@gmail.com>'
     """)
     if "# SMTP Settings" not in content:
         content += smtp_block
@@ -130,7 +130,7 @@ def generate_models(app_name):
         f.write(content)
     print_success("Generated CustomUser model in models.py")
 
-def generate_signals(app_name, default_group, use_welcome_email=True):
+def generate_signals(app_name, default_group, project_name, use_welcome_email=True):
     path = os.path.join(app_name, 'signals.py')
     
     email_logic = ""
@@ -140,7 +140,7 @@ def generate_signals(app_name, default_group, use_welcome_email=True):
             from django.core.mail import send_mail
             from django.conf import settings
             
-            subject = 'Bienvenue sur GestEcole'
+            subject = 'Bienvenue sur {project_name}'
             message = f'Bonjour {{instance.username}}, merci de vous être inscrit !'
             try:
                 send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [instance.email])
@@ -342,7 +342,7 @@ def generate_views(app_name, use_landing=True, use_2fa=False):
                     
                     try:
                         send_mail(
-                            'Code de sécurité GestEcole',
+                            'Code de sécurité {project_name}',
                             f'Votre code est : {otp}',
                             None,
                             [user.email],
@@ -550,18 +550,19 @@ def generate_urls(app_name, use_landing=True, admin_url='admin', use_2fa=False):
     
     print_success("Generated urls.py and updated root urls.py")
 
-def generate_templates(app_name, use_landing=True):
+def generate_templates(app_name, project_name, use_landing=True):
     templates_dir = os.path.join(app_name, 'templates', 'accounts')
     os.makedirs(templates_dir, exist_ok=True)
     
     def write_t(name, content):
+        content = content.replace("{{ project_name }}", project_name)
         with open(os.path.join(templates_dir, name), 'w') as f:
             f.write(textwrap.dedent(content))
 
     if use_landing:
         write_t('landing.html', """
             {% extends 'accounts/base_auth.html' %}
-            {% block title %}Bienvenue | GestEcole{% endblock %}
+            {% block title %}Bienvenue | {{ project_name }}{% endblock %}
             {% block content %}
             <div class="row align-items-center justify-content-center text-center">
                 <div class="col-lg-10 col-xl-8">
@@ -571,8 +572,8 @@ def generate_templates(app_name, use_landing=True):
                         </div>
                         <div class="position-relative z-1 py-4">
                             <div class="mb-5">
-                                <h1 class="display-3 fw-bold text-dark mb-3">GestEcole <span class="text-primary">Connect</span></h1>
-                                <p class="lead text-secondary mx-auto">La gestion scolaire nouvelle génération.</p>
+                                <h1 class="display-3 fw-bold text-dark mb-3">{{ project_name }} <span class="text-primary">Connect</span></h1>
+                                <p class="lead text-secondary mx-auto">Votre application de gestion en toute simplicité.</p>
                             </div>
                             <div class="d-grid gap-3 d-sm-flex justify-content-sm-center mb-5">
                                 {% if not user.is_authenticated %}
@@ -631,7 +632,7 @@ def generate_templates(app_name, use_landing=True):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{% block title %}GestEcole{% endblock %}</title>
+            <title>{% block title %}{{ project_name }}{% endblock %}</title>
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
             <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -697,7 +698,7 @@ def generate_templates(app_name, use_landing=True):
                 <div class="container">
                     <a class="navbar-brand d-flex align-items-center" href="/">
                         <i class="bi bi-mortarboard-fill me-2 fs-3"></i>
-                        Gest<span class="text-dark">Ecole</span>
+                        {{ project_name }}
                     </a>
                     
                     <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
@@ -780,7 +781,7 @@ def generate_templates(app_name, use_landing=True):
 
     write_t('dashboard.html', """
         {% extends 'accounts/base.html' %}
-        {% block title %}Dashboard | GestEcole{% endblock %}
+        {% block title %}Dashboard | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row mb-5">
             <div class="col-12">
@@ -1044,12 +1045,12 @@ def generate_templates(app_name, use_landing=True):
 
     write_t('user_list.html', """
         {% extends 'accounts/base.html' %}
-        {% block title %}Gestion des Utilisateurs | GestEcole{% endblock %}
+        {% block title %}Gestion des Utilisateurs | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row mb-4 align-items-center">
             <div class="col">
                 <h2 class="fw-bold mb-1">Communauté</h2>
-                <p class="text-secondary mb-0">Découvrez et gérez les membres de l'institution GestEcole.</p>
+                <p class="text-secondary mb-0">Découvrez et gérez les membres de l'institution {{ project_name }}.</p>
             </div>
             {% if user.is_superuser %}
             <div class="col-auto">
@@ -1133,7 +1134,7 @@ def generate_templates(app_name, use_landing=True):
 
     write_t('user_form.html', """
         {% extends 'accounts/base.html' %}
-        {% block title %}Modifier l'utilisateur | GestEcole{% endblock %}
+        {% block title %}Modifier l'utilisateur | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row">
             <div class="col-lg-6 mx-auto">
@@ -1319,14 +1320,15 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # Execution phases
+    project_name = get_project_name()
     app_name = 'accounts'
-    if setup_accounts_app(app_name):
+    if setup_accounts_app(app_name, project_name):
         generate_models(app_name)
-        generate_signals(app_name, default_group, welcome_email)
+        generate_signals(app_name, default_group, project_name, welcome_email)
         generate_forms(app_name)
         generate_views(app_name, use_landing, use_2fa)
         generate_urls(app_name, use_landing, admin_url, use_2fa)
-        generate_templates(app_name, use_landing)
+        generate_templates(app_name, project_name, use_landing)
         
         print_info("Initializing groups (Database required)...")
         print_warning("Running makemigrations and migrate first...")

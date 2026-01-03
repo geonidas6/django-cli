@@ -18,7 +18,7 @@ def get_project_name():
         for item in os.listdir('.'):
             if os.path.isdir(item) and os.path.exists(os.path.join(item, 'settings.py')):
                 return item
-    return 'gest_ecole' # Fallback default
+    return 'my_django_project' # Fallback default
 
 def setup_django():
     if not os.path.exists('manage.py'):
