@@ -1,57 +1,71 @@
-# 📚 Django CLI Tools & Documentation
+# 📚 Django CLI Tools
 
-Bienvenue dans ce projet Django (**GestEcole**). Ce dépôt contient des outils en ligne de commande pour accélérer le développement, ainsi que des guides essentiels pour la gestion et le déploiement.
+Bienvenue dans le projet **GestEcole**. Ce dépôt met à disposition des outils en ligne de commande pour simplifier la création et la gestion d'applications Django.
 
-## 🛠️ Outils CLI
+## 🚀 Installation & Démarrage
 
-Ce projet inclut deux scripts Python puissants pour automatiser les tâches répétitives :
+Suivez ces étapes pour installer et lancer le projet rapidement.
 
-### 1. [django-cli.py](django-cli.py) - Générateur CRUD
-Un outil similaire à `artisan` ou `symfony console` pour générer du code rapidement.
-*   **Création d'Apps** : `make:app`
-*   **Génération de Modèles** : `make:model` (Interactif)
-*   **CRUD Complet** : `make:crud` (Génère Views, URLs, Forms, Templates)
-*   **Listing des routes** : `route:list`
+### 1. Cloner le projet
+Récupérez le code source depuis GitHub :
 
-👉 **[Voir le Tutoriel Complet du CLI](TUTORIAL_DJANGO_CLI.md)**
+```bash
+git clone https://github.com/geonidas6/django-cli.git
+cd django-cli
+```
 
-### 2. [django-auth-cli.py](django-auth-cli.py) - Système d'Authentification
-Un script pour initialiser un système d'authentification complet et robuste en une seule commande.
-*   Gère les utilisateurs personnalisés (`CustomUser` avec photo).
-*   Crée les groupes et rôles (`Admin`, `Manager`, `Membre`).
-*   Génère les vues de connexion, inscription, et un dashboard moderne.
+### 2. Créer un Environnement Virtuel
+Il est recommandé d'utiliser un environnement virtuel pour isoler les dépendances :
+```bash
+python -m venv .venv
+```
 
----
+Activez l'environnement :
+*   **Mac/Linux** : `source .venv/bin/activate`
+*   **Windows** : `.venv\Scripts\activate`
 
-## 📖 Documentation
+### 3. Installer les Dépendances
+Installez Django et les bibliothèques requises (comme Pillow pour les images) :
+```bash
+pip install django pillow
+```
 
-Voici les guides disponibles pour vous aider à chaque étape du projet :
-
-### 🚀 [Guide de Déploiement (DEPLOY.md)](DEPLOY.md)
-*   Configuration de **Gunicorn** & **Nginx**.
-*   Sécurisation avec **SSL (Certbot)**.
-*   Gestion des fichiers statiques et settings de production.
-
-### 💡 [Commandes Utiles (util.md)](util.md)
-*   Aide-mémoire pour les commandes courantes (startproject, runserver, migrations).
-*   Initialisation d'un environnement virtuel.
-
-### 📘 [Tutoriel Django CLI (TUTORIAL_DJANGO_CLI.md)](TUTORIAL_DJANGO_CLI.md)
-*   Documentation détaillée pour utiliser `django-cli.py` et `django-auth-cli.py`.
+### 4. Lancer le Projet
+Si vous démarrez de zéro ou souhaitez tester immédiatement les outils :
+```bash
+python manage.py runserver
+```
+L'application sera accessible sur [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 ---
 
-## ⚡ Démarrage Rapide
+## 🛠️ Utilisation des Outils CLI
 
-1.  **Installez les dépendances** :
-    ```bash
-    pip install django pillow
-    ```
-2.  **Lancez le serveur** :
-    ```bash
-    python manage.py runserver
-    ```
-3.  **Utilisez le CLI** :
-    ```bash
-    python django-cli.py route:list
-    ```
+Ce projet fournit deux scripts principaux pour accélérer votre développement :
+
+### 🔹 [django-cli.py](TUTORIAL_DJANGO_CLI.md) (Générateur CRUD)
+Générez automatiquement des applications, modèles, vues, formulaires et templates.
+```bash
+# Exemple : Créer un CRUD complet pour un modèle 'Produit' dans l'app 'boutique'
+python django-cli.py make:crud boutique Produit
+```
+👉 **[Voir le Tutoriel Complet](TUTORIAL_DJANGO_CLI.md)**
+
+### 🔹 [django-auth-cli.py](TUTORIAL_DJANGO_CLI.md#système-dauthentification--rôles) (Auth System)
+Installez un système d'authentification complet (Login, Register, Dashboard, Rôles) en une commande :
+```bash
+python django-auth-cli.py
+```
+
+---
+
+## 📖 Documentation & Ressources
+
+*   **[📝 Tutoriel & Guide des Commandes (TUTORIAL_DJANGO_CLI.md)](TUTORIAL_DJANGO_CLI.md)** : Documentation détaillée des scripts.
+*   **[💡 Cheat Sheet (CHEATSHEET.md)](CHEATSHEET.md)** : Aide-mémoire des commandes Django essentielles.
+*   **[🚀 Guide de Déploiement (DEPLOY.md)](DEPLOY.md)** : Mettre le site en ligne (Gunicorn, Nginx, SSL).
+
+---
+
+## 🤝 Contribuer
+Les Pull Requests sont les bienvenues ! Pour des changements majeurs, merci d'ouvrir une issue pour discuter de ce que vous souhaitez changer.
