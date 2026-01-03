@@ -30,8 +30,17 @@ Installez Django et les bibliothèques requises (comme Pillow pour les images) :
 pip install django pillow
 ```
 
-### 4. Lancer le Projet
-Si vous démarrez de zéro ou souhaitez tester immédiatement les outils :
+### 4. Initialiser le Projet
+Ce dépôt fournit les outils mais pas le projet Django de base. Initialisez-le :
+```bash
+# Crée le projet dans le dossier courant
+# IMPORTANT : Utilisez le nom 'gest_ecole' car les scripts CLI sont pré-configurés pour ce nom.
+# Si vous choisissez un autre nom, vous devrez modifier la variable PROJECT_NAME dans les scripts.
+django-admin startproject gest_ecole .
+```
+
+### 5. Lancer le Projet
+Une fois le projet initialisé :
 ```bash
 python manage.py runserver
 ```

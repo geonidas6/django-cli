@@ -32,7 +32,8 @@ Voici les commandes de base pour démarrer et gérer un projet Django.
 5.  **Démarrer le projet Django** :
     ```bash
     # Crée le projet dans le dossier courant (.)
-    django-admin startproject config .
+    # IMPORTANT : Utilisez 'gest_ecole' car les scripts dépendent de ce nom
+    django-admin startproject gest_ecole .
     ```
 
 ---
