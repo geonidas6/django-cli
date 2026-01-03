@@ -195,12 +195,12 @@ def generate_signals(app_name, default_group, use_welcome_email=True):
 
 def init_groups(create_users=False):
     print_info("Bootstrapping groups, permissions, and users...")
+    project_name = get_project_name()
     init_script = textwrap.dedent(f"""
         import os
         import django
 
-        project_name = get_project_name()
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'{project_name}.settings')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', '{project_name}.settings')
 
         django.setup()
 
