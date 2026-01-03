@@ -6,17 +6,37 @@ from django.apps import apps
 import textwrap
 import subprocess
 
+
+def get_project_name():
+    # Try to find settings in likely locations
+    if 'DJANGO_SETTINGS_MODULE' in os.environ:
+        return os.environ['DJANGO_SETTINGS_MODULE'].split('.')[0]
+    
+    # Check current directory for manage.py and settings
+    if os.path.exists('manage.py'):
+        # basic heuristic: look for a folder that has settings.py/wsgi.py
+        for item in os.listdir('.'):
+            if os.path.isdir(item) and os.path.exists(os.path.join(item, 'settings.py')):
+                return item
+    return 'gest_ecole' # Fallback default
+
 def setup_django():
     if not os.path.exists('manage.py'):
-        print("Error: manage.py not found. Please run this script from the project root.")
-        sys.exit(1)
+        print("Warning: manage.py not found. Ensure you are in the project root.")
+        # We don't exit here because 'init:project' might be running
     
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gest_ecole.settings')
+    project_name = get_project_name()
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'{project_name}.settings')
     try:
         django.setup()
     except Exception as e:
-        print(f"Warning: Django setup failed: {e}")
-        print("Continuing, but some features might fail if they rely on the app registry.")
+        # Only warn if we are not running init command
+        if len(sys.argv) > 1 and sys.argv[1] == 'init:project':
+             pass
+        else:
+             print(f"Warning: Django setup failed: {e}")
+             print("Continuing, but some features might fail if they rely on the app registry.")
+
 
 def ensure_app_exists(app_name):
     if not os.path.exists(app_name):
@@ -25,7 +45,9 @@ def ensure_app_exists(app_name):
             subprocess.check_call([sys.executable, 'manage.py', 'startapp', app_name])
             print(f"App '{app_name}' created.")
             
-            settings_path = os.path.join('gest_ecole', 'settings.py')
+            project_name = get_project_name()
+            settings_path = os.path.join(project_name, 'settings.py')
+
             with open(settings_path, 'r') as f:
                 content = f.read()
             
@@ -44,7 +66,9 @@ def ensure_app_exists(app_name):
     return True
 
 def ensure_media_config():
-    settings_path = os.path.join('gest_ecole', 'settings.py')
+    project_name = get_project_name()
+    settings_path = os.path.join(project_name, 'settings.py')
+
     if not os.path.exists(settings_path):
         return
 
@@ -68,7 +92,8 @@ def ensure_media_config():
         print("settings.py updated with media configuration.")
 
     # Also check URLs
-    urls_path = os.path.join('gest_ecole', 'urls.py')
+    urls_path = os.path.join(project_name, 'urls.py')
+
     if not os.path.exists(urls_path):
         return
 
@@ -422,7 +447,9 @@ def generate_urls(app_name, model_name):
                 print("Could not find 'urlpatterns = []' to append to.")
 
     # Automate root URL inclusion
-    project_urls_path = os.path.join('gest_ecole', 'urls.py')
+    project_name = get_project_name()
+    project_urls_path = os.path.join(project_name, 'urls.py')
+
     if os.path.exists(project_urls_path):
         with open(project_urls_path, 'r') as f:
             root_content = f.read()
@@ -601,6 +628,27 @@ def process_command(command, args):
              except subprocess.CalledProcessError:
                  print("Error applying migrations.")
 
+    elif command == 'init:project':
+        # New init command
+        project_name = os.path.basename(os.getcwd())
+        # sanitize name slightly if needed (basic check)
+        project_name = project_name.replace('-', '_').replace(' ', '_')
+        
+        print(f"Initializing Django project '{project_name}' in current directory...")
+        try:
+            # Check if project already exists
+            if os.path.exists('manage.py'):
+                print("Error: manage.py found. A project likely already exists here.")
+                return
+
+            subprocess.check_call(['django-admin', 'startproject', project_name, '.'])
+            print(f"Project '{project_name}' initialized successfully.")
+        except subprocess.CalledProcessError:
+             print("Failed to run startproject. Ensure django-admin is in your PATH.")
+        except FileNotFoundError:
+             print("Error: django-admin command not found. Is Django installed? (pip install django)")
+
+
 if __name__ == "__main__":
     setup_django()
     
@@ -617,3 +665,5 @@ if __name__ == "__main__":
         print("  python django-cli.py make:view <app_name> <model_name>")
         print("  python django-cli.py make:crud <app_name> <model_name>")
         print("  python django-cli.py route:list")
+        print("  python django-cli.py init:project  (Initialize new project in current dir)")
+

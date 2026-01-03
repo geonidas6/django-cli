@@ -31,13 +31,11 @@ pip install django pillow
 ```
 
 ### 4. Initialiser le Projet
-Ce dépôt fournit les outils mais pas le projet Django de base. Initialisez-le :
+Ce dépôt fournit les outils mais pas le projet Django de base. Initialisez-le automatiquement avec le nom du dossier courant :
 ```bash
-# Crée le projet dans le dossier courant
-# IMPORTANT : Utilisez le nom 'gest_ecole' car les scripts CLI sont pré-configurés pour ce nom.
-# Si vous choisissez un autre nom, vous devrez modifier la variable PROJECT_NAME dans les scripts.
-django-admin startproject gest_ecole .
+python django-cli.py init:project
 ```
+*Cette commande va détecter le nom du dossier (ex: `django-cli`) et créer le projet Django correspondant.*
 
 ### 5. Lancer le Projet
 Une fois le projet initialisé :

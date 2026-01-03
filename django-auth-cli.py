@@ -38,6 +38,20 @@ def run_command(command, capture_output=False):
         # print_error(f"Command failed: {command}")
         return False, getattr(e, 'stderr', str(e))
 
+
+def get_project_name():
+    # Try to find settings in likely locations
+    if 'DJANGO_SETTINGS_MODULE' in os.environ:
+        return os.environ['DJANGO_SETTINGS_MODULE'].split('.')[0]
+    
+    # Check current directory for manage.py and settings
+    if os.path.exists('manage.py'):
+        # basic heuristic: look for a folder that has settings.py/wsgi.py
+        for item in os.listdir('.'):
+            if os.path.isdir(item) and os.path.exists(os.path.join(item, 'settings.py')):
+                return item
+    return 'gest_ecole' # Fallback default
+
 def setup_accounts_app(app_name='accounts'):
     print(f"{Colors.BOLD}Setting up '{app_name}' app...{Colors.ENDC}")
     if not os.path.exists(app_name):
@@ -45,7 +59,9 @@ def setup_accounts_app(app_name='accounts'):
         print_success(f"App '{app_name}' created.")
     
     # Register in settings.py
-    settings_path = 'gest_ecole/settings.py'
+    project_name = get_project_name()
+    settings_path = os.path.join(project_name, 'settings.py')
+
     with open(settings_path, 'r') as f:
         content = f.read()
     
@@ -183,7 +199,9 @@ def init_groups(create_users=False):
         import os
         import django
 
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gest_ecole.settings')
+        project_name = get_project_name()
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', f'{project_name}.settings')
+
         django.setup()
 
         from django.contrib.auth import get_user_model
@@ -494,8 +512,10 @@ def generate_urls(app_name, use_landing=True, admin_url='admin', use_2fa=False):
         f.write(content)
         
     # Root project URLs
-    root_urls_path = 'gest_ecole/urls.py'
+    project_name = get_project_name()
+    root_urls_path = os.path.join(project_name, 'urls.py')
     with open(root_urls_path, 'r') as f:
+
         root_content = f.read()
     
     if "from django.urls import path, include" not in root_content:
