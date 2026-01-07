@@ -96,7 +96,7 @@ def setup_accounts_app(app_name='accounts', project_name='Config'):
         # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
         # EMAIL_HOST = 'smtp.gmail.com'
         # EMAIL_PORT = 587
-        # EMAIL_USE_TLS = True
+        # EMAIL_USE_SSL = True
         # EMAIL_HOST_USER = 'votre-email@gmail.com'
         # EMAIL_HOST_PASSWORD = 'votre-mot-de-passe-d-application'
         # DEFAULT_FROM_EMAIL = '{project_name} <votre-email@gmail.com>'
@@ -106,6 +106,16 @@ def setup_accounts_app(app_name='accounts', project_name='Config'):
         modified = True
         print_success("Added commented SMTP settings placeholder to settings.py")
     
+    # Configure TEMPLATES DIRS
+    if "'DIRS': []" in content:
+        content = content.replace("'DIRS': []", "'DIRS': [BASE_DIR / 'templates']")
+        modified = True
+        print_success("Configured TEMPLATES DIRS to [BASE_DIR / 'templates']")
+    elif "'DIRS': []," in content:
+        content = content.replace("'DIRS': [],", "'DIRS': [BASE_DIR / 'templates'],")
+        modified = True
+        print_success("Configured TEMPLATES DIRS to [BASE_DIR / 'templates']")
+
     if modified:
         with open(settings_path, 'w') as f:
             f.write(content)
@@ -129,6 +139,28 @@ def generate_models(app_name):
     with open(path, 'w') as f:
         f.write(content)
     print_success("Generated CustomUser model in models.py")
+
+def generate_admin(app_name):
+    path = os.path.join(app_name, 'admin.py')
+    content = textwrap.dedent("""\
+        from django.contrib import admin
+        from django.contrib.auth.admin import UserAdmin
+        from .models import CustomUser
+
+        class CustomUserAdmin(UserAdmin):
+            fieldsets = UserAdmin.fieldsets + (
+                ('Custom Fields', {'fields': ('photo_profil', 'otp_code', 'otp_created_at')}),
+            )
+            add_fieldsets = UserAdmin.add_fieldsets + (
+                ('Custom Fields', {'fields': ('photo_profil', 'otp_code', 'otp_created_at')}),
+            )
+
+        admin.site.register(CustomUser, CustomUserAdmin)
+    """)
+    with open(path, 'w') as f:
+        f.write(content)
+    print_success("Generated admin.py with CustomUser registration")
+
 
 def generate_signals(app_name, default_group, project_name, use_welcome_email=True):
     path = os.path.join(app_name, 'signals.py')
@@ -554,14 +586,22 @@ def generate_templates(app_name, project_name, use_landing=True):
     templates_dir = os.path.join(app_name, 'templates', 'accounts')
     os.makedirs(templates_dir, exist_ok=True)
     
+    root_templates_dir = 'templates'
+    os.makedirs(root_templates_dir, exist_ok=True)
+
     def write_t(name, content):
         content = content.replace("{{ project_name }}", project_name)
         with open(os.path.join(templates_dir, name), 'w') as f:
             f.write(textwrap.dedent(content))
 
+    def write_root(name, content):
+        content = content.replace("{{ project_name }}", project_name)
+        with open(os.path.join(root_templates_dir, name), 'w') as f:
+            f.write(textwrap.dedent(content))
+
     if use_landing:
         write_t('landing.html', """
-            {% extends 'accounts/base_auth.html' %}
+            {% extends 'base_auth.html' %}
             {% block title %}Bienvenue | {{ project_name }}{% endblock %}
             {% block content %}
             <div class="row align-items-center justify-content-center text-center">
@@ -590,7 +630,7 @@ def generate_templates(app_name, project_name, use_landing=True):
             {% endblock %}
         """)
 
-    write_t('base_auth.html', """
+    write_root('base_auth.html', """
         <!DOCTYPE html>
         <html lang="fr">
         <head>
@@ -626,7 +666,72 @@ def generate_templates(app_name, project_name, use_landing=True):
         </html>
     """)
 
-    write_t('base.html', """
+    write_root('nav.html', """
+            <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+                <div class="container">
+                    <a class="navbar-brand d-flex align-items-center" href="/">
+                        <i class="bi bi-mortarboard-fill me-2 fs-3"></i>
+                        {{ project_name }}
+                    </a>
+                    
+                    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                        <i class="bi bi-list fs-2 text-primary"></i>
+                    </button>
+                    
+                    <div class="collapse navbar-collapse" id="navbarContent">
+                        <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'accounts:dashboard' %}">
+                                    <i class="bi bi-grid-1x2 me-1"></i> Dashboard
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'accounts:user_list' %}">
+                                    <i class="bi bi-people me-1"></i> Communauté
+                                </a>
+                            </li>
+                            {% if user.is_superuser or user.groups.all %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if 'group' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'accounts:group_list' %}">
+                                    <i class="bi bi-shield-lock me-1"></i> Accès & Rôles
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                        
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="dropdown">
+                                <div class="user-pill d-flex align-items-center dropdown-toggle shadow-none border-0" data-bs-toggle="dropdown">
+                                    {% if user.photo_profil %}
+                                        <img src="{{ user.photo_profil.url }}" class="rounded-circle me-2" width="32" height="32" style="object-fit: cover;">
+                                    {% else %}
+                                        <div class="avatar-circle me-2">{{ user.username|make_list|first|upper }}</div>
+                                    {% endif %}
+                                    <div class="d-none d-sm-block">
+                                        <span class="fw-bold small d-block">{{ user.username }}</span>
+                                    </div>
+                                </div>
+                                <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg rounded-4 p-2 mt-2">
+                                    <li><a class="dropdown-item rounded-3 py-2" href="{% url 'accounts:profile' %}"><i class="bi bi-person me-2"></i>Mon Profil</a></li>
+                                    <li><a class="dropdown-item rounded-3 py-2" href="{% url 'accounts:password_change' %}"><i class="bi bi-key me-2"></i>Sécurité</a></li>
+                                    <li><hr class="dropdown-divider opacity-50"></li>
+                                    <li>
+                                        <form action="{% url 'accounts:logout' %}" method="post">
+                                            {% csrf_token %}
+                                            <button type="submit" class="dropdown-item rounded-3 py-2 text-danger">
+                                                <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+    """)
+
+    write_root('base.html', """
         <!DOCTYPE html>
         <html lang="fr">
         <head>
@@ -694,68 +799,7 @@ def generate_templates(app_name, project_name, use_landing=True):
             </style>
         </head>
         <body>
-            <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
-                <div class="container">
-                    <a class="navbar-brand d-flex align-items-center" href="/">
-                        <i class="bi bi-mortarboard-fill me-2 fs-3"></i>
-                        {{ project_name }}
-                    </a>
-                    
-                    <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-                        <i class="bi bi-list fs-2 text-primary"></i>
-                    </button>
-                    
-                    <div class="collapse navbar-collapse" id="navbarContent">
-                        <ul class="navbar-nav mx-auto mb-2 mb-lg-0">
-                            <li class="nav-item">
-                                <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'accounts:dashboard' %}">
-                                    <i class="bi bi-grid-1x2 me-1"></i> Dashboard
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'accounts:user_list' %}">
-                                    <i class="bi bi-people me-1"></i> Communauté
-                                </a>
-                            </li>
-                            {% if user.is_superuser or user.groups.all %}
-                            <li class="nav-item">
-                                <a class="nav-link {% if 'group' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'accounts:group_list' %}">
-                                    <i class="bi bi-shield-lock me-1"></i> Accès & Rôles
-                                </a>
-                            </li>
-                            {% endif %}
-                        </ul>
-                        
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="dropdown">
-                                <div class="user-pill d-flex align-items-center dropdown-toggle shadow-none border-0" data-bs-toggle="dropdown">
-                                    {% if user.photo_profil %}
-                                        <img src="{{ user.photo_profil.url }}" class="rounded-circle me-2" width="32" height="32" style="object-fit: cover;">
-                                    {% else %}
-                                        <div class="avatar-circle me-2">{{ user.username|make_list|first|upper }}</div>
-                                    {% endif %}
-                                    <div class="d-none d-sm-block">
-                                        <span class="fw-bold small d-block">{{ user.username }}</span>
-                                    </div>
-                                </div>
-                                <ul class="dropdown-menu dropdown-menu-end border-0 shadow-lg rounded-4 p-2 mt-2">
-                                    <li><a class="dropdown-item rounded-3 py-2" href="{% url 'accounts:profile' %}"><i class="bi bi-person me-2"></i>Mon Profil</a></li>
-                                    <li><a class="dropdown-item rounded-3 py-2" href="{% url 'accounts:password_change' %}"><i class="bi bi-key me-2"></i>Sécurité</a></li>
-                                    <li><hr class="dropdown-divider opacity-50"></li>
-                                    <li>
-                                        <form action="{% url 'accounts:logout' %}" method="post">
-                                            {% csrf_token %}
-                                            <button type="submit" class="dropdown-item rounded-3 py-2 text-danger">
-                                                <i class="bi bi-box-arrow-right me-2"></i>Déconnexion
-                                            </button>
-                                        </form>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </nav>
+            {% include 'nav.html' %}
 
             <main class="container py-5 animate-fade-in">
                 {% if messages %}
@@ -780,7 +824,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('dashboard.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block title %}Dashboard | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row mb-5">
@@ -851,7 +895,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('login.html', """
-        {% extends 'accounts/base_auth.html' %}
+        {% extends 'base_auth.html' %}
         {% block content %}
         <div class="row justify-content-center min-vh-75 align-items-center">
             <div class="col-12 col-md-6 col-lg-5">
@@ -904,7 +948,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('register.html', """
-        {% extends 'accounts/base_auth.html' %}
+        {% extends 'base_auth.html' %}
         {% block content %}
         <div class="row justify-content-center py-5">
             <div class="col-12 col-md-8 col-lg-6">
@@ -961,7 +1005,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('profile.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block content %}
         <div class="row">
             <div class="col-lg-8 mx-auto">
@@ -1005,7 +1049,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('password_change.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block content %}
         <div class="row">
             <div class="col-lg-6 mx-auto">
@@ -1044,7 +1088,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('user_list.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block title %}Gestion des Utilisateurs | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row mb-4 align-items-center">
@@ -1133,7 +1177,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('user_form.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block title %}Modifier l'utilisateur | {{ project_name }}{% endblock %}
         {% block content %}
         <div class="row">
@@ -1176,7 +1220,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('user_confirm_delete.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block content %}
         <div class="row justify-content-center">
             <div class="col-md-6">
@@ -1198,7 +1242,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('group_list.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block content %}
         <div class="row mb-4 align-items-center">
             <div class="col"><h2 class="fw-bold">Groupes & Permissions</h2></div>
@@ -1230,7 +1274,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('group_form.html', """
-        {% extends 'accounts/base.html' %}
+        {% extends 'base.html' %}
         {% block content %}
         <div class="row justify-content-center">
             <div class="col-lg-8">
@@ -1267,7 +1311,7 @@ def generate_templates(app_name, project_name, use_landing=True):
     """)
 
     write_t('verify_otp.html', """
-        {% extends 'accounts/base_auth.html' %}
+        {% extends 'base_auth.html' %}
         {% block content %}
         <div class="card p-5 text-center" style="max-width: 450px; margin: auto;">
             <div class="bg-warning bg-opacity-10 d-inline-block p-3 rounded-circle mb-4 mx-auto">
@@ -1324,6 +1368,7 @@ if __name__ == "__main__":
     app_name = 'accounts'
     if setup_accounts_app(app_name, project_name):
         generate_models(app_name)
+        generate_admin(app_name)
         generate_signals(app_name, default_group, project_name, welcome_email)
         generate_forms(app_name)
         generate_views(app_name, use_landing, use_2fa)

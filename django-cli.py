@@ -65,8 +65,9 @@ def ensure_app_exists(app_name):
             sys.exit(1)
     return True
 
-def ensure_media_config():
-    project_name = get_project_name()
+def ensure_media_config(project_name=None):
+    if not project_name:
+        project_name = get_project_name()
     settings_path = os.path.join(project_name, 'settings.py')
 
     if not os.path.exists(settings_path):
@@ -118,7 +119,67 @@ def ensure_media_config():
         
         with open(urls_path, 'w') as f:
             f.write(urls_content)
-        print("urls.py updated for media serving.")
+
+def ensure_templates_config():
+    project_name = get_project_name()
+    settings_path = os.path.join(project_name, 'settings.py')
+
+    if not os.path.exists(settings_path):
+        return
+
+    with open(settings_path, 'r') as f:
+        content = f.read()
+
+    modified = False
+    
+    # Check if DIRS is configured for root templates
+    # We are looking for 'DIRS': [BASE_DIR / 'templates'] or similar
+    if "'DIRS': []" in content:
+        print("Configuring TEMPLATES DIRS in settings.py...")
+        content = content.replace("'DIRS': []", "'DIRS': [BASE_DIR / 'templates']")
+        modified = True
+    elif "'DIRS': []," in content:
+        print("Configuring TEMPLATES DIRS in settings.py...")
+        content = content.replace("'DIRS': [],", "'DIRS': [BASE_DIR / 'templates'],")
+        modified = True
+
+    if modified:
+        with open(settings_path, 'w') as f:
+            f.write(content)
+        print("settings.py updated for root templates.")
+
+    # Ensure root templates directory exists
+    if not os.path.exists('templates'):
+        os.makedirs('templates')
+        print("Created root 'templates' directory.")
+
+    # Create a default base.html if it doesn't exist (minimal version)
+    base_html_path = os.path.join('templates', 'base.html')
+    if not os.path.exists(base_html_path):
+        with open(base_html_path, 'w') as f:
+            f.write(textwrap.dedent("""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>{% block title %}Django App{% endblock %}</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            </head>
+            <body class="container mt-4">
+                <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+                    <div class="container-fluid">
+                        <a class="navbar-brand" href="/">My Project</a>
+                    </div>
+                </nav>
+                <main>
+                    {% block content %}{% endblock %}
+                </main>
+                <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+            </body>
+            </html>
+            """))
+        print("Created default 'templates/base.html'.")
 
 def get_fields_interactive(existing_model=False):
     fields_code = ""
@@ -467,6 +528,10 @@ def generate_urls(app_name, model_name):
 
 def generate_templates(app_name, model_name, model_class):
     print(f"\nGenerating templates for {model_name}...")
+    
+    # Ensure root configuration matches
+    ensure_templates_config()
+
     templates_dir = os.path.join(app_name, 'templates', app_name)
     os.makedirs(templates_dir, exist_ok=True)
     
@@ -481,27 +546,27 @@ def generate_templates(app_name, model_name, model_class):
         detail_fields = "            <li>{{ object }}</li>\n"
 
     list_html = textwrap.dedent(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{model_name} List</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="container mt-4">
+    {{% extends 'base.html' %}}
+
+    {{% block title %}}{model_name} List{{% endblock %}}
+
+    {{% block content %}}
         <h1>{model_name} List</h1>
         <a href="{{% url '{app_name}:{model_name.lower()}_create' %}}" class="btn btn-primary mb-3">Create New</a>
         <table class="table table-striped">
             <thead>
                 <tr>
                     <th>ID</th>
-{field_headers}                    <th>Actions</th>
+                    {field_headers.strip()}
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {{% for item in {model_name.lower()}s %}}
                 <tr>
                     <td>{{{{ item.id }}}}</td>
-{field_cells}                    <td>
+                    {field_cells.strip()}
+                    <td>
                         <a href="{{% url '{app_name}:{model_name.lower()}_detail' item.pk %}}" class="btn btn-sm btn-info">View</a>
                         <a href="{{% url '{app_name}:{model_name.lower()}_update' item.pk %}}" class="btn btn-sm btn-warning">Edit</a>
                         <a href="{{% url '{app_name}:{model_name.lower()}_delete' item.pk %}}" class="btn btn-sm btn-danger">Delete</a>
@@ -510,20 +575,17 @@ def generate_templates(app_name, model_name, model_class):
                 {{% endfor %}}
             </tbody>
         </table>
-    </body>
-    </html>
+    {{% endblock %}}
     """)
     with open(os.path.join(templates_dir, f'{model_name.lower()}_list.html'), 'w') as f:
         f.write(list_html)
 
     form_html = textwrap.dedent(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{model_name} Form</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="container mt-4">
+    {{% extends 'base.html' %}}
+
+    {{% block title %}}{{% if object %}}Update{{% else %}}Create{{% endif %}} {model_name}{{% endblock %}}
+
+    {{% block content %}}
         <h1>{{% if object %}}Update{{% else %}}Create{{% endif %}} {model_name}</h1>
         <form method="post" enctype="multipart/form-data">
             {{% csrf_token %}}
@@ -531,39 +593,34 @@ def generate_templates(app_name, model_name, model_class):
             <button type="submit" class="btn btn-success">Save</button>
             <a href="{{% url '{app_name}:{model_name.lower()}_list' %}}" class="btn btn-secondary">Cancel</a>
         </form>
-    </body>
-    </html>
+    {{% endblock %}}
     """)
     with open(os.path.join(templates_dir, f'{model_name.lower()}_form.html'), 'w') as f:
         f.write(form_html)
 
     detail_html = textwrap.dedent(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{model_name} Detail</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="container mt-4">
+    {{% extends 'base.html' %}}
+
+    {{% block title %}}{model_name} Detail{{% endblock %}}
+
+    {{% block content %}}
         <h1>{model_name} Details</h1>
         <ul>
             <li><strong>ID:</strong> {{{{ object.pk }}}}</li>
-{detail_fields}        </ul>
+            {detail_fields.strip()}
+        </ul>
         <a href="{{% url '{app_name}:{model_name.lower()}_list' %}}" class="btn btn-secondary">Back</a>
-    </body>
-    </html>
+    {{% endblock %}}
     """)
     with open(os.path.join(templates_dir, f'{model_name.lower()}_detail.html'), 'w') as f:
         f.write(detail_html)
 
     delete_html = textwrap.dedent(f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Confirm Delete</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="container mt-4">
+    {{% extends 'base.html' %}}
+
+    {{% block title %}}Confirm Delete{{% endblock %}}
+
+    {{% block content %}}
         <h1>Delete {model_name}?</h1>
         <p>Are you sure you want to delete "{{{{ object }}}}"?</p>
         <form method="post">
@@ -571,12 +628,369 @@ def generate_templates(app_name, model_name, model_class):
             <button type="submit" class="btn btn-danger">Confirm Delete</button>
             <a href="{{% url '{app_name}:{model_name.lower()}_list' %}}" class="btn btn-secondary">Cancel</a>
         </form>
-    </body>
-    </html>
+    {{% endblock %}}
     """)
     with open(os.path.join(templates_dir, f'{model_name.lower()}_confirm_delete.html'), 'w') as f:
         f.write(delete_html)
     print("Templates generated.")
+
+def ensure_static_config(project_name=None):
+    if not project_name:
+        project_name = get_project_name()
+    settings_path = os.path.join(project_name, 'settings.py')
+
+    if not os.path.exists(settings_path):
+        return
+
+    # Create static directory
+    if not os.path.exists('static'):
+        os.makedirs('static')
+        print("Created root 'static' directory.")
+
+    with open(settings_path, 'r') as f:
+        content = f.read()
+    
+    modified = False
+    
+    if 'STATICFILES_DIRS' not in content:
+        print("Configuring STATICFILES_DIRS in settings.py...")
+        # Check if we can find a good place to insert it, near STATIC_URL
+        if "STATIC_URL = 'static/'" in content:
+            content = content.replace(
+                "STATIC_URL = 'static/'",
+                "STATIC_URL = 'static/'\n\nSTATICFILES_DIRS = [\n    BASE_DIR / 'static',\n]"
+            )
+            modified = True
+        else:
+            # Fallback: append to end
+            content += "\nSTATICFILES_DIRS = [\n    BASE_DIR / 'static',\n]\n"
+            modified = True
+
+    if modified:
+        with open(settings_path, 'w') as f:
+            f.write(content)
+        print("settings.py updated with static files configuration.")
+
+def configure_deployment():
+    print("\n" + "="*40)
+    print("Deployment Configuration (Passenger/cPanel)")
+    print("="*40)
+    
+    project_name = get_project_name()
+    print(f"Detected project name: {project_name}")
+    
+    # Interactive Prompts
+    domain = input(f"Domain name (e.g. example.com): ").strip()
+    
+    default_app_root = os.getcwd()
+    app_root = input(f"Application Root Path [{default_app_root}]: ").strip()
+    if not app_root:
+        app_root = default_app_root
+        
+    default_python = sys.executable
+    python_path = input(f"Python Interpreter Path [{default_python}]: ").strip()
+    if not python_path:
+        python_path = default_python
+    
+    # 1. Check/Generate wsgi.py
+    wsgi_path = os.path.join(project_name, 'wsgi.py')
+    if not os.path.exists(wsgi_path):
+        print(f"\nWarning: {wsgi_path} not found. Creating default...")
+        wsgi_content = textwrap.dedent(f"""
+        import os
+        from django.core.wsgi import get_wsgi_application
+
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', '{project_name}.settings')
+
+        application = get_wsgi_application()
+        """)
+        with open(wsgi_path, 'w') as f:
+            f.write(wsgi_content.strip())
+        print(f"Created {wsgi_path}")
+    print(f"2. wsgi.py checked.")
+
+    # 2. Generate .htaccess
+    htaccess_path = '.htaccess'
+    htaccess_content = textwrap.dedent(f"""
+    # Passenger configuration (NE PAS TOUCHER)
+    PassengerAppRoot {app_root}
+    PassengerBaseURI /
+    PassengerPython {python_path}
+    PassengerAppType wsgi
+    PassengerStartupFile {project_name}/wsgi.py
+    # IMPORTANT
+    RewriteEngine Off
+    """)
+    
+    if os.path.exists(htaccess_path):
+        overwrite = input(f"Warning: {htaccess_path} already exists. Overwrite? (yes/no) [no]: ").strip().lower()
+        if overwrite not in ['yes', 'y']:
+            print("Skipping .htaccess generation.")
+        else:
+            with open(htaccess_path, 'w') as f:
+                f.write(htaccess_content.strip())
+            print(f"Regenerated {htaccess_path}")
+    else:
+        with open(htaccess_path, 'w') as f:
+            f.write(htaccess_content.strip())
+        print(f"Created {htaccess_path}")
+
+    print("\n" + "="*40)
+    print("Deployment configuration completed.")
+    print(f"1. .htaccess file created/updated.")
+    print(f"2. wsgi.py checked.")
+    
+    # 3. Configure settings.py
+    settings_path = os.path.join(project_name, 'settings.py')
+    if os.path.exists(settings_path):
+        print(f"\nConfiguring {settings_path}...")
+        with open(settings_path, 'r') as f:
+            settings_content = f.read()
+        
+        modified_settings = False
+        
+        # ALLOWED_HOSTS
+        if domain and domain not in settings_content:
+             # Basic regex/string find, can be improved but sufficient for simple lists
+             if "ALLOWED_HOSTS = []" in settings_content:
+                 settings_content = settings_content.replace("ALLOWED_HOSTS = []", f"ALLOWED_HOSTS = ['{domain}']")
+                 modified_settings = True
+                 print(f"  - Added '{domain}' to ALLOWED_HOSTS")
+             elif "ALLOWED_HOSTS = [" in settings_content:
+                  # If list is not empty, we assume user manages it, or successfully appended
+                  if f"'{domain}'" not in settings_content:
+                      settings_content = settings_content.replace("ALLOWED_HOSTS = [", f"ALLOWED_HOSTS = ['{domain}', ")
+                      modified_settings = True
+                      print(f"  - Added '{domain}' to ALLOWED_HOSTS")
+
+        # STATIC_ROOT
+        if "STATIC_ROOT" not in settings_content:
+            # Add STATIC_ROOT near STATIC_URL
+            if "STATIC_URL" in settings_content:
+                settings_content = settings_content.replace(
+                    "STATIC_URL = 'static/'", 
+                    "STATIC_URL = 'static/'\nSTATIC_ROOT = BASE_DIR / 'staticfiles'"
+                )
+                modified_settings = True
+                print("  - Added STATIC_ROOT = BASE_DIR / 'staticfiles'")
+        
+        # DEBUG
+        # We ask before turning off DEBUG
+        turn_off_debug = input("Do you want to set DEBUG = False? (yes/no) [yes]: ").strip().lower()
+        if turn_off_debug in ['', 'yes', 'y']:
+             if "DEBUG = True" in settings_content:
+                 settings_content = settings_content.replace("DEBUG = True", "DEBUG = False")
+                 modified_settings = True
+                 print("  - Set DEBUG = False")
+
+        # Whitenoise Configuration
+        print("  - Checking Whitenoise configuration...")
+        whitenoise_installed = False
+        try:
+            import whitenoise
+            whitenoise_installed = True
+        except ImportError:
+            pass
+
+        if not whitenoise_installed:
+             install_wn = input("  > Whitenoise not found. Install it for static files support? (yes/no) [yes]: ").strip().lower()
+             if install_wn in ['', 'yes', 'y']:
+                 try:
+                     subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'whitenoise'])
+                     whitenoise_installed = True
+                     print("  > Whitenoise installed.")
+                 except subprocess.CalledProcessError:
+                     print("  > Failed to install Whitenoise.")
+
+        if whitenoise_installed:
+            # Middleware
+            if 'whitenoise.middleware.WhiteNoiseMiddleware' not in settings_content:
+                if 'django.middleware.security.SecurityMiddleware' in settings_content:
+                    settings_content = settings_content.replace(
+                        "'django.middleware.security.SecurityMiddleware',",
+                        "'django.middleware.security.SecurityMiddleware',\n    'whitenoise.middleware.WhiteNoiseMiddleware',"
+                    )
+                    modified_settings = True
+                    print("  - Added WhiteNoiseMiddleware")
+            
+            # Storage
+            if 'STATICFILES_STORAGE' not in settings_content:
+                 settings_content += "\n# Whitenoise Configuration\nSTATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'\n"
+                 modified_settings = True
+                 print("  - Added STATICFILES_STORAGE for Whitenoise")
+
+        # Sitemap Configuration
+        print("  - Checking Sitemap configuration...")
+        enable_sitemap = input("  > Do you want to enable Sitemap (sitemap.xml)? (yes/no) [yes]: ").strip().lower()
+        if enable_sitemap in ['', 'yes', 'y']:
+            # 1. Update settings.py
+            if 'django.contrib.sites' not in settings_content:
+                settings_content = settings_content.replace(
+                    "'django.contrib.staticfiles',",
+                    "'django.contrib.staticfiles',\n    'django.contrib.sites',\n    'django.contrib.sitemaps',"
+                )
+                if "SITE_ID =" not in settings_content:
+                    settings_content += "\nSITE_ID = 1\n"
+                modified_settings = True
+                print("  - Added sites/sitemaps apps and SITE_ID to settings.py")
+            
+            # 2. Create sitemaps.py
+            sitemaps_path = os.path.join(project_name, 'sitemaps.py')
+            if not os.path.exists(sitemaps_path):
+                sitemap_code = textwrap.dedent("""
+                from django.contrib import sitemaps
+                from django.urls import reverse
+
+                class StaticViewSitemap(sitemaps.Sitemap):
+                    priority = 0.5
+                    changefreq = 'daily'
+
+                    def items(self):
+                        # Add your static view names here
+                        return ['accounts:landing', 'accounts:login', 'accounts:register']
+
+                    def location(self, item):
+                        return reverse(item)
+                """)
+                with open(sitemaps_path, 'w') as f:
+                    f.write(sitemap_code.strip())
+                print(f"  - Created {sitemaps_path}")
+            
+            # 3. Update urls.py
+            urls_path = os.path.join(project_name, 'urls.py')
+            if os.path.exists(urls_path):
+                with open(urls_path, 'r') as f:
+                    urls_content = f.read()
+                
+                if 'sitemap.xml' not in urls_content:
+                    # Add imports
+                    if 'from django.contrib.sitemaps.views import sitemap' not in urls_content:
+                        urls_content = urls_content.replace(
+                            "from django.urls import path, include",
+                            "from django.urls import path, include\nfrom django.contrib.sitemaps.views import sitemap\nfrom .sitemaps import StaticViewSitemap"
+                        )
+                    # Add sitemaps dict
+                    if "sitemaps = {" not in urls_content:
+                        urls_content = urls_content.replace(
+                            "urlpatterns = [",
+                            "sitemaps = {\n    'static': StaticViewSitemap,\n}\n\nurlpatterns = ["
+                        )
+                    # Add path
+                    if "path('sitemap.xml'" not in urls_content:
+                        urls_content = urls_content.replace(
+                            "urlpatterns = [",
+                            "urlpatterns = [\n    path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),"
+                        )
+                    with open(urls_path, 'w') as f:
+                        f.write(urls_content)
+                    print("  - Registered sitemap.xml in urls.py")
+
+        if modified_settings:
+            with open(settings_path, 'w') as f:
+                f.write(settings_content)
+            print(f"4. settings.py updated.")
+        else:
+            print(f"4. settings.py checked (no changes needed).")
+
+    # 4. Run collectstatic
+    print("\n" + "="*40)
+    run_collectstatic = input("Do you want to run 'python manage.py collectstatic' now? (yes/no) [no]: ").strip().lower()
+    if run_collectstatic in ['yes', 'y']:
+        try:
+             print("Running collectstatic...")
+             subprocess.check_call([sys.executable, 'manage.py', 'collectstatic', '--noinput'])
+             print("✔ collectstatic completed.")
+        except subprocess.CalledProcessError:
+             print("✘ collectstatic failed. Please run it manually.")
+
+    # 4.5 Run migrate
+    print("\n" + "="*40)
+    run_migrate = input("Do you want to run 'python manage.py migrate' now? (yes/no) [no]: ").strip().lower()
+    if run_migrate in ['yes', 'y']:
+        try:
+             print("Running migrate...")
+             subprocess.check_call([sys.executable, 'manage.py', 'migrate'])
+             print("✔ migrate completed.")
+
+             # 4.6 Update Site Domain
+             print("\n" + "="*40)
+             print(f"Updating Django Site domain to '{domain}'...")
+             update_site_cmd = f"from django.contrib.sites.models import Site; Site.objects.update_or_create(id=1, defaults={{'domain': '{domain}', 'name': '{project_name}'}})"
+             subprocess.check_call([sys.executable, 'manage.py', 'shell', '-c', update_site_cmd])
+             print(f"✔ Site domain updated to {domain}")
+
+        except subprocess.CalledProcessError:
+             print("✘ migrate or site update failed. Please run it manually.")
+    
+    # 5. Generate requirements.txt
+    print("\n" + "="*40)
+    gen_reqs = input("Do you want to generate/update 'requirements.txt'? (yes/no) [yes]: ").strip().lower()
+    if gen_reqs in ['', 'yes', 'y']:
+        try:
+            print("Generating requirements.txt...")
+            with open('requirements.txt', 'w') as f:
+                subprocess.check_call([sys.executable, '-m', 'pip', 'freeze'], stdout=f)
+            print("✔ requirements.txt generated.")
+        except subprocess.CalledProcessError:
+             print("✘ Failed to generate requirements.txt.")
+
+    # 6. Generate Tutorial
+    print("\n" + "="*40)
+    gen_tutorial = input("Do you want to generate 'TUTORIAL_DEPLOY.md'? (yes/no) [yes]: ").strip().lower()
+    if gen_tutorial in ['', 'yes', 'y']:
+        tutorial_content = textwrap.dedent(f"""
+        # Tutorial: Deploying Django with django-cli.py
+
+        This tutorial explains how to use the `deploy:config` command to prepare your Django project for deployment, specifically targeting cPanel/Passenger environments.
+
+        ## Prerequisites
+        - A Django project initialized.
+        - `django-cli.py` in your project root.
+
+        ## Step 1: Run the Deployment Configuration Command
+        Run the following command:
+
+        ```bash
+        python django-cli.py deploy:config
+        ```
+
+        ## Step 2: Provide Deployment Information
+        Fill in the hosting panel form with:
+        
+        1.  **Application URL**: `{domain}`
+        2.  **Application startup file**: `{project_name}/wsgi.py`
+        3.  **Application entry point**: `{project_name}.wsgi.application`
+        4.  **Configuration file**: `.htaccess` (Generated by this tool).
+        5.  **Configuration file**: `requirements.txt` (For installing dependencies).
+        
+        Using the tool prompts:
+        -   **Domain name**: `{domain}`
+        -   **Application Root Path**: `{app_root}`
+        -   **Python Interpreter Path**: `{python_path}`
+
+        ## Step 3: Verified Files
+        The tool will automatically:
+        1.  **Generate/Update `.htaccess`** with provided paths.
+        2.  **Check `wsgi.py`**.
+        3.  **Configure `settings.py`**:
+            -   Add domain to `ALLOWED_HOSTS`.
+            -   Set `DEBUG = False`.
+            -   Set `STATIC_ROOT`.
+            -   (Optional) Configure Whitenoise.
+            -   (Optional) Configure Sitemap.
+        4.  **Generate `requirements.txt`**.
+        
+        ## Step 4: Final Steps
+        -   Run `python manage.py collectstatic` (Tool can do this).
+        -   **Important**: If you enabled Sitemap, run `python manage.py migrate` (Tool can do this).
+        -   Restart your Python application from the hosting panel.
+        """)
+        with open('TUTORIAL_DEPLOY.md', 'w') as f:
+            f.write(tutorial_content.strip())
+        print("✔ Created TUTORIAL_DEPLOY.md")
+
+    print("\n" + "="*40)
+
 
 def process_command(command, args):
     if command == 'make:app':
@@ -616,7 +1030,7 @@ def process_command(command, args):
         list_routes()
     
     if command in ['make:model', 'make:crud']:
-         print("\\n" + "="*40)
+         print("\n" + "="*40)
          do_migrate = input("Do you want to apply database migrations now? (yes/no) [yes]: ").strip().lower()
          if do_migrate in ['', 'yes', 'y']:
              try:
@@ -641,12 +1055,20 @@ def process_command(command, args):
                 print("Error: manage.py found. A project likely already exists here.")
                 return
 
-            subprocess.check_call(['django-admin', 'startproject', project_name, '.'])
+            subprocess.check_call([sys.executable, '-m', 'django', 'startproject', project_name, '.'])
             print(f"Project '{project_name}' initialized successfully.")
+            
+            # Post-init setup
+            ensure_static_config(project_name)
+            ensure_media_config(project_name)
+
         except subprocess.CalledProcessError:
              print("Failed to run startproject. Ensure django-admin is in your PATH.")
         except FileNotFoundError:
              print("Error: django-admin command not found. Is Django installed? (pip install django)")
+
+    elif command == 'deploy:config':
+        configure_deployment()
 
 
 if __name__ == "__main__":
@@ -666,4 +1088,5 @@ if __name__ == "__main__":
         print("  python django-cli.py make:crud <app_name> <model_name>")
         print("  python django-cli.py route:list")
         print("  python django-cli.py init:project  (Initialize new project in current dir)")
+        print("  python django-cli.py deploy:config (Generate .htaccess and check wsgi.py for deployment)")
 
