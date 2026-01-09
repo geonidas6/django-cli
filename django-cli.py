@@ -992,6 +992,17 @@ def configure_deployment():
     print("\n" + "="*40)
 
 
+
+def generate_requirements():
+    print("\nGenerating requirements.txt...")
+    try:
+        with open('requirements.txt', 'w') as f:
+            subprocess.check_call([sys.executable, '-m', 'pip', 'freeze'], stdout=f)
+        print("✔ requirements.txt generated/updated successfully.")
+    except subprocess.CalledProcessError:
+        print("✘ Failed to generate requirements.txt.")
+    print("\n")
+
 def process_command(command, args):
     if command == 'make:app':
         if len(args) < 1:
@@ -1069,6 +1080,9 @@ def process_command(command, args):
 
     elif command == 'deploy:config':
         configure_deployment()
+    
+    elif command == 'generate:requirements':
+        generate_requirements()
 
 
 if __name__ == "__main__":
@@ -1089,4 +1103,5 @@ if __name__ == "__main__":
         print("  python django-cli.py route:list")
         print("  python django-cli.py init:project  (Initialize new project in current dir)")
         print("  python django-cli.py deploy:config (Generate .htaccess and check wsgi.py for deployment)")
+        print("  python django-cli.py generate:requirements (Generate requirements.txt)")
 
