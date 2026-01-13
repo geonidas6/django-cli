@@ -553,14 +553,8 @@ def generate_urls(app_name, use_landing=True, admin_url='admin', use_2fa=False):
     if "from django.urls import path, include" not in root_content:
         root_content = root_content.replace("from django.urls import path", "from django.urls import path, include")
 
-    # Add app include if not present (only if it's NOT the root path already)
-    if not use_landing:
-        # If not root, we might want it at /accounts/
-        if f"path('{app_name}/'" not in root_content and f"path('', include('{app_name}.urls'))" not in root_content:
-            root_content = root_content.replace("urlpatterns = [", f"urlpatterns = [\n    path('{app_name}/', include('{app_name}.urls')),")
-
-    # Root path logic for project URLs
-    if f"path('', include('{app_name}.urls'))" not in root_content:
+    # Add app include if not present
+    if f"include('{app_name}.urls')" not in root_content and f'include("{app_name}.urls")' not in root_content:
         root_content = root_content.replace("urlpatterns = [", f"urlpatterns = [\n    path('', include('{app_name}.urls')),")
 
     # Custom Admin URL
@@ -573,9 +567,8 @@ def generate_urls(app_name, use_landing=True, admin_url='admin', use_2fa=False):
         root_content = root_content.replace("from django.urls import path, include", "from django.urls import path, include\nfrom django.conf import settings\nfrom django.conf.urls.static import static")
 
     # Add media URL pattern if DEBUG is True
-    media_pattern = "+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)"
-    if media_pattern not in root_content:
-        root_content += f"\nif settings.DEBUG:\n    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)"
+    if 'static(settings.MEDIA_URL' not in root_content:
+        root_content += f"\n\nif settings.DEBUG:\n    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)\n"
 
     with open(root_urls_path, 'w') as f:
         f.write(root_content)

@@ -114,7 +114,7 @@ def ensure_media_config(project_name=None):
         if new_imports:
             urls_content = "\n".join(new_imports) + "\n" + urls_content
         
-        if 'urlpatterns += static(settings.MEDIA_URL' not in urls_content:
+        if 'static(settings.MEDIA_URL' not in urls_content:
              urls_content += "\n\nif settings.DEBUG:\n    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)\n"
         
         with open(urls_path, 'w') as f:
@@ -197,7 +197,7 @@ def get_fields_interactive(existing_model=False):
         if not field_name:
             break
             
-        print("  Field types: string (default), text, int, float, bool, date, datetime, email, file, image")
+        print("  Field types: string (default), text, int, float, bool, date, datetime, email, file, image, json")
         print("  Relations: foreignkey, onetoone, manytomany")
         field_type_input = input("  > Field type [string]: ").strip().lower()
         
@@ -247,6 +247,16 @@ def get_fields_interactive(existing_model=False):
             related_model = input("  > Related Model: ").strip()
             definition = f"models.ManyToManyField('{related_model}')"
         
+        elif field_type_input == 'json':
+            print("  Default value: list ([]), dict ({}), or empty (None)")
+            json_default = input("  > Default [list]: ").strip().lower()
+            if json_default == 'dict':
+                definition = "models.JSONField(default=dict)"
+            elif json_default == 'empty':
+                definition = "models.JSONField(null=True, blank=True)"
+            else:
+                definition = "models.JSONField(default=list)"
+            
         else:
             print(f"  Unknown type '{field_type_input}', defaulting to CharField.")
             definition = "models.CharField(max_length=255)"
@@ -360,7 +370,13 @@ def ensure_model_exists(app_name, model_name):
 
     # NEW MODEL
     print(f"Creating model '{model_name}' in '{app_name}'...")
-    fields_code = get_fields_interactive(existing_model=False)
+    
+    add_timestamps = input("  > Do you want to add created_at and updated_at timestamps? (yes/no) [yes]: ").strip().lower()
+    timestamp_fields = ""
+    if add_timestamps in ['', 'yes', 'y', 'true']:
+        timestamp_fields = "    created_at = models.DateTimeField(auto_now_add=True)\n    updated_at = models.DateTimeField(auto_now=True)\n"
+    
+    fields_code = timestamp_fields + get_fields_interactive(existing_model=False)
 
     if not fields_code:
         fields_code = "    description = models.CharField(max_length=200, default='Description')\n    created_at = models.DateTimeField(auto_now_add=True)\n"
@@ -515,11 +531,10 @@ def generate_urls(app_name, model_name):
         with open(project_urls_path, 'r') as f:
             root_content = f.read()
         
-        inclusion_line = f"path('{app_name}/', include('{app_name}.urls'))"
-        if inclusion_line not in root_content:
+        if f"include('{app_name}.urls')" not in root_content and f'include("{app_name}.urls")' not in root_content:
             print(f"Registering '{app_name}' URLs in project root urls.py...")
             if "urlpatterns = [" in root_content:
-                root_content = root_content.replace("urlpatterns = [", f"urlpatterns = [\n    {inclusion_line},")
+                root_content = root_content.replace("urlpatterns = [", f"urlpatterns = [\n    path('{app_name}/', include('{app_name}.urls')),")
                 with open(project_urls_path, 'w') as f:
                     f.write(root_content)
                 print("Project root urls.py updated.")
@@ -1003,6 +1018,91 @@ def generate_requirements():
         print("✘ Failed to generate requirements.txt.")
     print("\n")
 
+def generate_command(app_name, command_name):
+    print(f"\nGenerating management command '{command_name}' for {app_name}...")
+    management_dir = os.path.join(app_name, 'management')
+    commands_dir = os.path.join(management_dir, 'commands')
+    
+    os.makedirs(commands_dir, exist_ok=True)
+    
+    # Ensure __init__.py exists
+    for d in [management_dir, commands_dir]:
+        init_file = os.path.join(d, '__init__.py')
+        if not os.path.exists(init_file):
+            with open(init_file, 'w') as f:
+                f.write("")
+
+    command_path = os.path.join(commands_dir, f'{command_name}.py')
+    if os.path.exists(command_path):
+        print(f"Command '{command_name}' already exists in '{app_name}'. Skipping.")
+        return
+
+    content = textwrap.dedent(f"""
+    from django.core.management.base import BaseCommand
+
+    class Command(BaseCommand):
+        help = 'Description of {command_name} command'
+
+        def add_arguments(self, parser):
+            # Optional: add arguments here
+            # parser.add_argument('my_arg', type=str)
+            pass
+
+        def handle(self, *args, **options):
+            self.stdout.write(self.style.SUCCESS('Successfully ran {command_name}'))
+    """)
+    
+    with open(command_path, 'w') as f:
+        f.write(content.strip() + "\n")
+    print(f"✔ Command created: {command_path}")
+
+def generate_service(app_name, service_name):
+    print(f"\nGenerating service '{service_name}' for {app_name}...")
+    services_dir = os.path.join(app_name, 'services')
+    os.makedirs(services_dir, exist_ok=True)
+    
+    init_file = os.path.join(services_dir, '__init__.py')
+    if not os.path.exists(init_file):
+        with open(init_file, 'w') as f:
+            f.write("")
+
+    # Handle service name formatting (usually CamelCase for class, snake_case for file)
+    file_name = "".join(["_" + c.lower() if c.isupper() else c for c in service_name]).lstrip("_")
+    if "_" not in file_name:
+        file_name = service_name.lower()
+    
+    # If the user provided a snake_case name, we keep it as file name
+    if "_" in service_name:
+        class_name = "".join([part.capitalize() for part in service_name.split("_")])
+        file_name = service_name
+    else:
+        class_name = service_name[0].upper() + service_name[1:]
+        if not class_name.endswith("Service"):
+            class_name += "Service"
+
+    service_path = os.path.join(services_dir, f'{file_name}.py')
+    if os.path.exists(service_path):
+        print(f"Service '{file_name}' already exists in '{app_name}'. Skipping.")
+        return
+
+    content = textwrap.dedent(f"""
+    class {class_name}:
+        \"\"\"
+        Service class to handle business logic for {service_name}.
+        \"\"\"
+
+        def __init__(self):
+            pass
+
+        def execute(self, *args, **kwargs):
+            # Add business logic here
+            pass
+    """)
+    
+    with open(service_path, 'w') as f:
+        f.write(content.strip() + "\n")
+    print(f"✔ Service created: {service_path}")
+
 def process_command(command, args):
     if command == 'make:app':
         if len(args) < 1:
@@ -1029,13 +1129,44 @@ def process_command(command, args):
          
          model_class = get_model_class(app_name, model_name)
 
-         if command == 'make:form' or command == 'make:crud':
-             generate_form(app_name, model_name)
-         
          if command == 'make:view' or command == 'make:crud':
              generate_views(app_name, model_name)
              generate_urls(app_name, model_name)
              generate_templates(app_name, model_name, model_class)
+
+    elif command == 'make:command':
+        if len(args) < 1:
+            app_name = input("App name: ").strip()
+            command_name = input("Command name: ").strip()
+        elif len(args) == 1:
+            app_name = args[0]
+            command_name = input("Command name: ").strip()
+        else:
+            app_name, command_name = args[0], args[1]
+        
+        if not app_name or not command_name:
+            print("Error: App name and command name are required.")
+            return
+
+        ensure_app_exists(app_name)
+        generate_command(app_name, command_name)
+
+    elif command == 'make:service':
+        if len(args) < 1:
+            app_name = input("App name: ").strip()
+            service_name = input("Service name: ").strip()
+        elif len(args) == 1:
+            app_name = args[0]
+            service_name = input("Service name: ").strip()
+        else:
+            app_name, service_name = args[0], args[1]
+        
+        if not app_name or not service_name:
+            print("Error: App name and service name are required.")
+            return
+
+        ensure_app_exists(app_name)
+        generate_service(app_name, service_name)
              
     elif command == 'route:list':
         list_routes()
@@ -1100,6 +1231,8 @@ if __name__ == "__main__":
         print("  python django-cli.py make:form <app_name> <model_name>")
         print("  python django-cli.py make:view <app_name> <model_name>")
         print("  python django-cli.py make:crud <app_name> <model_name>")
+        print("  python django-cli.py make:command <app_name> <command_name>")
+        print("  python django-cli.py make:service <app_name> <service_name>")
         print("  python django-cli.py route:list")
         print("  python django-cli.py init:project  (Initialize new project in current dir)")
         print("  python django-cli.py deploy:config (Generate .htaccess and check wsgi.py for deployment)")
